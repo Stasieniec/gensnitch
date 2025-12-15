@@ -1,0 +1,29 @@
+{
+  "name": "gensnitch",
+  "version": "0.1.0",
+  "description": "Chrome extension to detect AI-generated images using local analysis",
+  "type": "module",
+  "scripts": {
+    "icons": "node scripts/generate-icons.js",
+    "dev": "npm run icons && vite build --watch",
+    "build": "npm run icons && vite build",
+    "zip": "npm run build && cd dist && zip -r ../gensnitch.zip ."
+  },
+  "keywords": [
+    "chrome-extension",
+    "ai-detection",
+    "c2pa",
+    "exif",
+    "metadata"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12"
+  },
+  "dependencies": {
+    "exifr": "^7.1.3"
+  }
+}
