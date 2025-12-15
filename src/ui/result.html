@@ -16,7 +16,7 @@
         </svg>
         <span>GenSnitch</span>
       </div>
-      <span class="version">v0.1.0</span>
+      <span class="version">v0.2.0</span>
     </header>
 
     <main id="content">
@@ -26,13 +26,21 @@
       </div>
 
       <div class="results hidden" id="results">
-        <!-- Verdict Badge -->
+        <!-- Verdict Section -->
         <div class="verdict-section" id="verdict-section">
-          <div class="verdict-badge" id="verdict-badge">
-            <span class="verdict-icon" id="verdict-icon"></span>
-            <span class="verdict-text" id="verdict-text"></span>
+          <div class="verdict-header">
+            <div class="verdict-icon-wrapper" id="verdict-icon-wrapper">
+              <svg id="verdict-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+            </div>
+            <div class="verdict-content">
+              <div class="verdict-label">Analysis Result</div>
+              <div class="verdict-text" id="verdict-text"></div>
+            </div>
           </div>
-          <div class="confidence" id="confidence"></div>
+          <div class="confidence" id="confidence">
+            <span class="label-text">Confidence:</span>
+            <span class="level" id="confidence-level"></span>
+          </div>
         </div>
 
         <!-- Disclaimer -->
@@ -42,7 +50,7 @@
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <span>This is NOT a guarantee of authenticity. Metadata can be modified or stripped.</span>
+          <span>This is not a guarantee of authenticity. Metadata can be modified or stripped.</span>
         </div>
 
         <!-- Notes -->
@@ -58,7 +66,7 @@
           <!-- C2PA -->
           <details class="signal-details">
             <summary class="signal-summary">
-              <span class="signal-icon" id="c2pa-icon">○</span>
+              <span class="signal-icon" id="c2pa-icon"></span>
               C2PA / Content Credentials
             </summary>
             <div class="signal-content" id="c2pa-content"></div>
@@ -67,7 +75,7 @@
           <!-- Metadata -->
           <details class="signal-details">
             <summary class="signal-summary">
-              <span class="signal-icon" id="metadata-icon">○</span>
+              <span class="signal-icon" id="metadata-icon"></span>
               EXIF / XMP Metadata
             </summary>
             <div class="signal-content" id="metadata-content"></div>
@@ -76,7 +84,7 @@
           <!-- PNG Text -->
           <details class="signal-details">
             <summary class="signal-summary">
-              <span class="signal-icon" id="png-icon">○</span>
+              <span class="signal-icon" id="png-icon"></span>
               PNG Text Chunks
             </summary>
             <div class="signal-content" id="png-content"></div>
@@ -91,7 +99,7 @@
               <input type="checkbox" disabled>
               <span class="toggle-text">Enable ML fallback analysis</span>
             </label>
-            <span class="coming-soon-badge">Coming in v1.0</span>
+            <span class="coming-soon-badge">v1.0</span>
           </div>
         </section>
 
@@ -115,7 +123,11 @@
 
       <!-- Error State -->
       <div class="error hidden" id="error">
-        <div class="error-icon">⚠️</div>
+        <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
         <h2>Analysis Error</h2>
         <p id="error-message"></p>
       </div>
@@ -123,9 +135,9 @@
 
     <footer class="footer">
       <a href="https://github.com/gensnitch/gensnitch" target="_blank" rel="noopener">GitHub</a>
-      <span>•</span>
+      <span>&middot;</span>
       <a href="https://github.com/gensnitch/gensnitch/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy</a>
-      <span>•</span>
+      <span>&middot;</span>
       <span>Local processing only</span>
     </footer>
   </div>
@@ -133,4 +145,3 @@
   <script type="module" src="result.js"></script>
 </body>
 </html>
-

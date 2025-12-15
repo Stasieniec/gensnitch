@@ -13,7 +13,30 @@ import type {
   PngTextResult,
 } from './types';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
+
+// Known AI tool identifiers in C2PA claim generators or issuers
+const AI_TOOL_PATTERNS = [
+  'chatgpt', 'gpt-4', 'gpt4', 'openai',
+  'stable diffusion', 'stablediffusion',
+  'midjourney', 'dall-e', 'dalle',
+  'firefly', 'imagen', 'flux',
+  'comfyui', 'automatic1111', 'a1111',
+  'invoke', 'diffusers',
+  'ideogram', 'leonardo',
+  'runway', 'pika',
+  'sora', 'kling', 'haiper',
+  'copilot', 'gemini', 'claude',
+];
+
+/**
+ * Check if a string contains AI tool indicators
+ */
+function containsAIToolPattern(text: string | undefined): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  return AI_TOOL_PATTERNS.some(pattern => lower.includes(pattern));
+}
 
 /**
  * Generate a unique report ID
@@ -28,11 +51,43 @@ function generateId(): string {
  * Determine verdict based on analysis signals
  */
 function determineVerdict(signals: AnalysisSignals): Verdict {
-  // Check C2PA for explicit AI generation indication
+  // Check C2PA for AI evidence
   if (signals.c2pa.present) {
-    // If C2PA is present, it might indicate provenance
-    // But we can't fully parse it in v0, so note it
-    return 'AI_EVIDENCE';
+    // Check for AI-related assertions in C2PA
+    if (signals.c2pa.summary?.aiAssertions && signals.c2pa.summary.aiAssertions.length > 0) {
+      return 'AI_EVIDENCE';
+    }
+    
+    // Check claim generator for AI tools
+    if (containsAIToolPattern(signals.c2pa.summary?.claimGenerator)) {
+      return 'AI_EVIDENCE';
+    }
+    
+    // Check issuer for AI tools (e.g., OpenAI)
+    if (containsAIToolPattern(signals.c2pa.summary?.issuer)) {
+      return 'AI_EVIDENCE';
+    }
+    
+    // Check certificate subject/issuer
+    if (containsAIToolPattern(signals.c2pa.summary?.certificate?.subject)) {
+      return 'AI_EVIDENCE';
+    }
+    if (containsAIToolPattern(signals.c2pa.summary?.certificate?.issuer)) {
+      return 'AI_EVIDENCE';
+    }
+    
+    // Check actions for AI-related terms
+    if (signals.c2pa.summary?.actions) {
+      for (const action of signals.c2pa.summary.actions) {
+        if (action.includes('c2pa.created') || action.includes('generated')) {
+          // Check if we have AI tool in claim generator/issuer
+          if (containsAIToolPattern(signals.c2pa.summary?.claimGenerator) ||
+              containsAIToolPattern(signals.c2pa.summary?.issuer)) {
+            return 'AI_EVIDENCE';
+          }
+        }
+      }
+    }
   }
 
   // Check metadata for AI indicators
@@ -52,18 +107,8 @@ function determineVerdict(signals: AnalysisSignals): Verdict {
   ].filter(Boolean);
 
   for (const sw of softwareIndicators) {
-    if (sw) {
-      const lower = sw.toLowerCase();
-      if (
-        lower.includes('stable diffusion') ||
-        lower.includes('midjourney') ||
-        lower.includes('dall-e') ||
-        lower.includes('comfyui') ||
-        lower.includes('automatic1111') ||
-        lower.includes('flux')
-      ) {
-        return 'AI_EVIDENCE';
-      }
+    if (containsAIToolPattern(sw)) {
+      return 'AI_EVIDENCE';
     }
   }
 
@@ -83,7 +128,10 @@ function calculateConfidence(
 
   if (verdict === 'NO_EVIDENCE') {
     // No evidence doesn't mean "real" - confidence is how sure we are about the analysis
-    // If we had metadata to analyze, we're more confident
+    // C2PA with valid signature is strong provenance evidence
+    if (signals.c2pa.present && signals.c2pa.validated === 'valid') {
+      return 'high';
+    }
     if (signals.metadata.found || signals.pngText.found) {
       return 'medium';
     }
@@ -93,9 +141,22 @@ function calculateConfidence(
   // AI_EVIDENCE verdict
   let score = 0;
 
-  // C2PA presence is significant
+  // C2PA with AI tool as claim generator/issuer is strong evidence
   if (signals.c2pa.present) {
-    score += 2;
+    if (containsAIToolPattern(signals.c2pa.summary?.claimGenerator) ||
+        containsAIToolPattern(signals.c2pa.summary?.issuer)) {
+      score += 4;
+    }
+    
+    // AI assertions are very strong evidence
+    if (signals.c2pa.summary?.aiAssertions?.length) {
+      score += 3;
+    }
+    
+    // Validated signature increases confidence
+    if (signals.c2pa.validated === 'valid') {
+      score += 2;
+    }
   }
 
   // Multiple metadata indicators increase confidence
@@ -135,11 +196,48 @@ function generateNotes(signals: AnalysisSignals, verdict: Verdict): string[] {
   const notes: string[] = [];
 
   // C2PA notes
+  if (signals.c2pa.present) {
+    notes.push('Content Credentials (C2PA) found in image');
+    
+    // Validation status - note that "invalid" in c2pa-web often means untrusted, not crypto failure
+    if (signals.c2pa.validated === 'valid') {
+      notes.push('Signature cryptographically verified');
+    } else if (signals.c2pa.validated === 'invalid') {
+      // Check if it's an untrusted issuer vs actual crypto failure
+      if (signals.c2pa.trust === 'untrusted' || signals.c2pa.trust === 'unknown') {
+        notes.push('Signature valid but issuer not in trust list');
+      } else {
+        notes.push('Signature verification failed');
+      }
+    }
+    
+    if (signals.c2pa.trust === 'trusted') {
+      notes.push('Issuer is in local trust list');
+    } else if (signals.c2pa.trust === 'untrusted') {
+      notes.push('Issuer is NOT in local trust list');
+    }
+    
+    if (signals.c2pa.summary?.claimGenerator) {
+      notes.push(`Claim Generator: ${signals.c2pa.summary.claimGenerator}`);
+    }
+    if (signals.c2pa.summary?.issuer) {
+      notes.push(`Signed by: ${signals.c2pa.summary.issuer}`);
+    }
+    if (signals.c2pa.summary?.certificate?.subject) {
+      notes.push(`Certificate: ${signals.c2pa.summary.certificate.subject}`);
+    }
+    if (signals.c2pa.summary?.aiAssertions?.length) {
+      notes.push(`AI Assertions: ${signals.c2pa.summary.aiAssertions.join(', ')}`);
+    }
+    if (signals.c2pa.summary?.actions?.length) {
+      notes.push(`Actions: ${signals.c2pa.summary.actions.join(', ')}`);
+    }
+  } else if (signals.c2pa.available) {
+    notes.push('No Content Credentials (C2PA) found');
+  }
+  
   if (signals.c2pa.errors && signals.c2pa.errors.length > 0) {
     notes.push(...signals.c2pa.errors);
-  }
-  if (signals.c2pa.present) {
-    notes.push('C2PA/Content Credentials signature detected in image');
   }
 
   // Metadata notes
@@ -179,7 +277,7 @@ function generateNotes(signals: AnalysisSignals, verdict: Verdict): string[] {
   // Verdict explanation
   if (verdict === 'AI_EVIDENCE') {
     notes.push(
-      'Evidence suggests this image may have been created or modified by AI tools'
+      'Evidence suggests this image was created or modified by AI tools'
     );
   } else if (verdict === 'NO_EVIDENCE') {
     notes.push(
@@ -224,7 +322,13 @@ export function createErrorReport(url: string, error: string): Report {
     verdict: 'ERROR',
     confidence: 'low',
     signals: {
-      c2pa: { available: false, present: false, errors: [error] },
+      c2pa: { 
+        available: false, 
+        present: false, 
+        validated: 'unknown',
+        trust: 'unknown',
+        errors: [error] 
+      },
       metadata: { found: false, aiIndicators: [] },
       pngText: { found: false, chunks: [], aiIndicators: [] },
     },
@@ -267,4 +371,3 @@ export async function runAnalysis(
     );
   }
 }
-

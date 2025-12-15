@@ -8,7 +8,7 @@ import { analyzeC2PA } from './lib/analyzers/c2pa';
 import { analyzeMetadata } from './lib/analyzers/metadata';
 import { analyzePngText } from './lib/analyzers/pngText';
 import { runAnalysis, createErrorReport } from './lib/report';
-import type { Report } from './lib/types';
+import type { Report, C2PAResult } from './lib/types';
 
 const MENU_ID = 'gensnitch-check';
 const RESULT_WIDTH = 420;
@@ -55,6 +55,50 @@ async function openResultsWindow(key: string): Promise<void> {
 }
 
 /**
+ * Detect MIME type from image bytes
+ */
+function detectMimeType(bytes: Uint8Array): string {
+  // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+    return 'image/png';
+  }
+  // JPEG signature: FF D8 FF
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+    return 'image/jpeg';
+  }
+  // WebP signature: 52 49 46 46 ... 57 45 42 50 (RIFF...WEBP)
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return 'image/webp';
+  }
+  // GIF signature: 47 49 46 38
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+    return 'image/gif';
+  }
+  // AVIF/HEIC: Look for 'ftyp' box
+  if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (brand === 'avif') return 'image/avif';
+    if (brand === 'heic' || brand === 'heix') return 'image/heic';
+  }
+  
+  return 'application/octet-stream';
+}
+
+/**
+ * Wrapper to call C2PA analyzer with the new input format
+ */
+async function analyzeC2PAWrapper(data: ArrayBuffer): Promise<C2PAResult> {
+  const bytes = new Uint8Array(data);
+  const mimeType = detectMimeType(bytes);
+  
+  return analyzeC2PA({
+    bytes,
+    mimeType,
+  });
+}
+
+/**
  * Handle context menu click
  */
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
@@ -82,7 +126,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     // Run analysis
     const report = await runAnalysis(imageData, srcUrl, {
-      analyzeC2PA,
+      analyzeC2PA: analyzeC2PAWrapper,
       analyzeMetadata,
       analyzePngText,
     });
@@ -111,4 +155,3 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
 // Log that the service worker started
 console.log('[GenSnitch] Service worker started');
-

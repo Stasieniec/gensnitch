@@ -1,6 +1,6 @@
 {
   "name": "gensnitch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Chrome extension to detect AI-generated images using local analysis",
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "ai-detection",
     "c2pa",
     "exif",
-    "metadata"
+    "metadata",
+    "content-credentials"
   ],
   "author": "",
   "license": "MIT",
@@ -24,6 +25,7 @@
     "vite": "^5.0.12"
   },
   "dependencies": {
+    "@contentauth/c2pa-web": "^0.5.4",
     "exifr": "^7.1.3"
   }
 }

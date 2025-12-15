@@ -1,103 +1,154 @@
 /**
  * C2PA / Content Credentials Analyzer
  * 
- * TODO: Integrate @contentauth/c2pa-web when WASM support in MV3 is more stable
- * For v0, this is a placeholder that returns unavailable status
+ * Uses an offscreen document to run C2PA WASM analysis,
+ * since service workers don't have access to window/DOM APIs.
  */
 
-import type { C2PAResult } from '../types';
+import type { C2PAResult, C2PAInput } from '../types';
 
-/**
- * C2PA manifest signatures that might appear in image data
- * These are used for basic detection without full WASM parsing
- */
-const C2PA_SIGNATURES = {
-  // JUMBF box type for C2PA
-  JUMBF_C2PA: new Uint8Array([0x63, 0x32, 0x70, 0x61]), // "c2pa"
-  // XMP C2PA namespace indicator
-  XMP_C2PA_NS: 'http://c2pa.org/',
-};
+const OFFSCREEN_DOCUMENT_PATH = 'offscreen/offscreen.html';
+
+// Track if offscreen document is being created
+let creatingOffscreenDocument: Promise<void> | null = null;
 
 /**
- * Basic check for C2PA signatures in raw bytes
- * This is a lightweight check - full validation requires WASM
+ * Check if offscreen document exists
  */
-function hasC2PASignature(data: Uint8Array): boolean {
-  const dataStr = new TextDecoder('latin1').decode(data);
+async function hasOffscreenDocument(): Promise<boolean> {
+  // @ts-expect-error - getContexts is available in Chrome 116+
+  if (chrome.runtime.getContexts) {
+    // @ts-expect-error - getContexts API
+    const contexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT'],
+      documentUrls: [chrome.runtime.getURL(OFFSCREEN_DOCUMENT_PATH)],
+    });
+    return contexts.length > 0;
+  }
   
-  // Check for JUMBF C2PA box
-  for (let i = 0; i < data.length - 4; i++) {
-    if (
-      data[i] === C2PA_SIGNATURES.JUMBF_C2PA[0] &&
-      data[i + 1] === C2PA_SIGNATURES.JUMBF_C2PA[1] &&
-      data[i + 2] === C2PA_SIGNATURES.JUMBF_C2PA[2] &&
-      data[i + 3] === C2PA_SIGNATURES.JUMBF_C2PA[3]
-    ) {
-      return true;
+  // Fallback for older Chrome versions
+  try {
+    // Try to send a ping message
+    const response = await chrome.runtime.sendMessage({ type: 'PING' });
+    return response?.success === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ensure offscreen document is created
+ */
+async function ensureOffscreenDocument(): Promise<void> {
+  const exists = await hasOffscreenDocument();
+  if (exists) {
+    return;
+  }
+
+  if (creatingOffscreenDocument) {
+    await creatingOffscreenDocument;
+    return;
+  }
+
+  creatingOffscreenDocument = chrome.offscreen.createDocument({
+    url: OFFSCREEN_DOCUMENT_PATH,
+    reasons: [chrome.offscreen.Reason.WORKERS],
+    justification: 'C2PA WASM analysis requires DOM/window APIs',
+  });
+
+  try {
+    await creatingOffscreenDocument;
+    console.log('[GenSnitch] Offscreen document created');
+    
+    // Give it a moment to initialize
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } catch (err) {
+    console.error('[GenSnitch] Failed to create offscreen document:', err);
+    throw err;
+  } finally {
+    creatingOffscreenDocument = null;
+  }
+}
+
+/**
+ * Send analysis request to offscreen document
+ */
+async function analyzeViaOffscreen(imageBytes: number[], mimeType?: string): Promise<C2PAResult> {
+  await ensureOffscreenDocument();
+  
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'ANALYZE_C2PA',
+      imageBytes,
+      mimeType,
+    });
+    
+    if (response?.success) {
+      return response.result as C2PAResult;
+    } else {
+      return {
+        available: false,
+        present: false,
+        validated: 'unknown',
+        trust: 'unknown',
+        errors: [response?.error || 'Offscreen analysis failed'],
+      };
     }
+  } catch (err) {
+    console.error('[GenSnitch] Offscreen communication error:', err);
+    return {
+      available: false,
+      present: false,
+      validated: 'unknown',
+      trust: 'unknown',
+      errors: [`Offscreen error: ${err instanceof Error ? err.message : String(err)}`],
+    };
   }
-  
-  // Check for XMP C2PA namespace
-  if (dataStr.includes(C2PA_SIGNATURES.XMP_C2PA_NS)) {
-    return true;
-  }
-  
-  return false;
 }
 
 /**
  * Analyze image for C2PA content credentials
- * 
- * Current implementation: Basic signature detection only
- * Full C2PA validation with WASM is planned for future versions
  */
-export async function analyzeC2PA(data: ArrayBuffer): Promise<C2PAResult> {
+export async function analyzeC2PA(input: C2PAInput): Promise<C2PAResult> {
+  const { bytes, mimeType } = input;
+  
   try {
-    const uint8Data = new Uint8Array(data);
-    const hasSignature = hasC2PASignature(uint8Data);
+    // Convert Uint8Array to regular array for message passing
+    const imageBytes = Array.from(bytes);
     
-    if (hasSignature) {
-      return {
-        available: false, // Full parsing not available yet
-        present: true,
-        summary: {
-          // We can't extract details without full WASM parser
-        },
-        errors: [
-          'C2PA signature detected but full parsing requires WASM support (coming in future version)',
-        ],
-      };
-    }
-    
-    return {
-      available: false,
-      present: false,
-      errors: [
-        'Full C2PA validation not available in v0. Basic signature check performed.',
-      ],
-    };
+    return await analyzeViaOffscreen(imageBytes, mimeType);
   } catch (err) {
+    console.error('[GenSnitch] C2PA analysis error:', err);
     return {
       available: false,
       present: false,
-      errors: [
-        `C2PA analysis error: ${err instanceof Error ? err.message : 'Unknown error'}`,
-      ],
+      validated: 'unknown',
+      trust: 'unknown',
+      errors: [`C2PA error: ${err instanceof Error ? err.message : String(err)}`],
     };
   }
 }
 
 /**
+ * Legacy function signature for backward compatibility
+ */
+export async function analyzeC2PALegacy(data: ArrayBuffer): Promise<C2PAResult> {
+  return analyzeC2PA({
+    bytes: new Uint8Array(data),
+  });
+}
+
+/**
  * Stub for future Cloudflare Worker integration
- * This will allow offloading heavy WASM processing to a worker
  */
 export async function analyzeC2PARemote(
   _imageUrl: string
 ): Promise<C2PAResult> {
-  // TODO: Implement when Cloudflare Worker is ready
   return {
     available: false,
     present: false,
+    validated: 'unknown',
+    trust: 'unknown',
     errors: ['Remote C2PA analysis not implemented yet'],
   };
 }

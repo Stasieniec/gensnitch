@@ -1,0 +1,31 @@
+# GenSnitch Local Trust List
+# SHA-256 fingerprints of trusted certificate issuers
+# Format: One SHA-256 hash per line (lowercase hex, no colons)
+# Lines starting with # are comments
+
+# Adobe Content Authenticity Initiative
+# These are example/placeholder hashes - update with real trusted certs
+# Adobe Root CA (placeholder - verify actual hash)
+# bc7e1c5d8a9f3e2b1a0c4d5e6f7890abcdef1234567890abcdef1234567890ab
+
+# Microsoft (placeholder)
+# de3f4a5b6c7d8e9f0a1b2c3d4e5f6789012345678901234567890abcdef1234
+
+# Google (placeholder)  
+# 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+
+# Truepic
+# abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890
+
+# Starling Lab
+# fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321
+
+# Note: This is a local trust list for GenSnitch.
+# "Unknown trust" means the signer is not in this list, NOT that the signature is invalid.
+# A valid signature from an unknown issuer simply means we haven't vetted that issuer.
+#
+# To add a trusted issuer:
+# 1. Get the SHA-256 fingerprint of their certificate
+# 2. Add it to this file (lowercase hex, no colons or spaces)
+# 3. Rebuild the extension
+

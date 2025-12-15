@@ -10,12 +10,12 @@ GenSnitch is designed with privacy as a core principle. We believe you should be
 
 **GenSnitch does NOT collect any data.**
 
-- ❌ No images are uploaded anywhere
-- ❌ No analytics or telemetry
-- ❌ No usage tracking
-- ❌ No personal information collection
-- ❌ No cookies or browser fingerprinting
-- ❌ No third-party services
+- No images are uploaded anywhere
+- No analytics or telemetry
+- No usage tracking
+- No personal information collection
+- No cookies or browser fingerprinting
+- No third-party services
 
 ## How GenSnitch Works
 
@@ -37,8 +37,9 @@ GenSnitch requests certain browser permissions to function. Here's why each is n
 |------------|---------|
 | `contextMenus` | Creates the "Check if AI-generated" option in the right-click menu |
 | `storage` | Temporarily stores analysis reports so the results window can display them |
-| `scripting` | Required to fetch `blob:` URLs that exist within the page context |
+| `scripting` | Required to fetch image bytes from the page context (needed to bypass CORS restrictions) |
 | `activeTab` | Allows the extension to interact with the current tab when you trigger an analysis |
+| `offscreen` | Required to run WebAssembly-based C2PA content credentials verification (WASM needs a DOM context unavailable in service workers) |
 
 ### Optional Permissions (Requested at Runtime)
 
@@ -63,7 +64,18 @@ GenSnitch uses Chrome's `session` storage to temporarily hold analysis reports. 
 GenSnitch uses the following open-source libraries, all bundled locally:
 
 - **exifr** - For parsing EXIF/XMP metadata (MIT License)
-- No network requests are made by any dependencies
+- **@contentauth/c2pa-web** - For C2PA/Content Credentials verification using WebAssembly (BSD-3-Clause License, by Content Authenticity Initiative)
+
+All dependencies are bundled into the extension package. **No network requests are made by any dependencies** - all processing happens locally in your browser.
+
+## WebAssembly Usage
+
+GenSnitch uses WebAssembly (WASM) for C2PA content credentials verification. This is why the extension's Content Security Policy includes `wasm-unsafe-eval`. The WASM module:
+
+- Is bundled locally within the extension (not loaded from any CDN)
+- Runs entirely in your browser
+- Does not communicate with any external servers
+- Is sourced from the open-source Content Authenticity Initiative SDK
 
 ## Future Features
 

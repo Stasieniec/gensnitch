@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "GenSnitch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Check if an image is AI-generated using local analysis (C2PA, EXIF, PNG metadata)",
   "permissions": [
     "contextMenus",
     "storage",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "offscreen"
   ],
   "optional_host_permissions": [
     "https://*/*",
@@ -16,6 +17,9 @@
   "background": {
     "service_worker": "background.js",
     "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -31,6 +35,11 @@
       "128": "icons/icon128.png"
     },
     "default_title": "GenSnitch - AI Image Detector"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["wasm/*.wasm"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
-
